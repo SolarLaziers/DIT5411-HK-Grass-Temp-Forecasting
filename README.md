@@ -6,8 +6,8 @@ This repository showcases the implementation of the DIT5411 Machine Learning pro
 ### Key Highlights:
 - **Comprehensive Data Preprocessing**: Includes handling missing values, scaling, and generating sequences with a 30-day sliding window.
 - **Model Architectures**:
-    - **Baseline RNN**: A single-layer architecture with 50 units.
-    - **Stacked LSTM**: A two-layer architecture with 50 units per layer, incorporating dropout for improved regularization.
+   - **Baseline RNN**: A single-layer architecture with 50 units.
+   - **Stacked LSTM**: A two-layer architecture with 50 units per layer, incorporating dropout for improved regularization.
 - **Performance Metrics**: Evaluation using Mean Absolute Error (MAE) and Root Mean Square Error (RMSE), complemented by visual comparisons of predictions versus actual values.
 - **Findings**: The LSTM model outperforms the RNN model, effectively capturing long-term dependencies and seasonal variations in the data.
 
