@@ -46,7 +46,7 @@ The LSTM model demonstrates superior performance, particularly in capturing long
 
 ## Team Members
 - **LUK KA CHUN** (ID: 220268421)
-- **Student2** (ID: YYYY)
+- **Liew Wang Yui** (ID: YYYY)
 - **Student3** (ID: ZZZZ)
 
 ## References
