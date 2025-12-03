@@ -16,6 +16,14 @@ from tensorflow.keras.optimizers import Adam
 import matplotlib.pyplot as plt
 
 #%% [code]
+# List available GPUs
+gpus = tf.config.list_physical_devices('GPU')
+print("Available GPUs:", gpus)
+
+# Optional: Enable device logging to see placement
+tf.debugging.set_log_device_placement(True)
+
+#%% [code]
 # Load processed data
 X_train = np.load('../data/X_train.npy')
 y_train = np.load('../data/y_train.npy')
