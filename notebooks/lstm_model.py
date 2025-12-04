@@ -44,10 +44,10 @@ model.add(Dropout(0.2))
 model.add(Dense(1))
 model.compile(optimizer=Adam(learning_rate=0.001), loss='mse')
 
-# Callbacks
+# Callbacks (save best in Keras format)
 callbacks = [
     EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True),
-    ModelCheckpoint(MODELS_DIR / 'lstm_model.h5', monitor='val_loss', save_best_only=True)
+    ModelCheckpoint(MODELS_DIR / 'lstm_model.keras', monitor='val_loss', save_best_only=True)
 ]
 
 # Train
@@ -60,8 +60,8 @@ history = model.fit(
     verbose=1
 )
 
-# Ensure final best model saved
-model.save(MODELS_DIR / 'lstm_model_final.h5')
+# Ensure final best model saved (Keras format)
+model.save(MODELS_DIR / 'lstm_model_final.keras')
 
 # Plot training history and save figure
 plt.plot(history.history['loss'], label='Train Loss')

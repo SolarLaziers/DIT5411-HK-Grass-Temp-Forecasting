@@ -41,10 +41,10 @@ model.add(SimpleRNN(50, input_shape=(seq_length, n_features), return_sequences=F
 model.add(Dense(1))
 model.compile(optimizer=Adam(learning_rate=0.001), loss='mse')
 
-# Callbacks
+# Callbacks (save best in Keras format)
 callbacks = [
     EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True),
-    ModelCheckpoint(MODELS_DIR / 'rnn_model.h5', monitor='val_loss', save_best_only=True)
+    ModelCheckpoint(MODELS_DIR / 'rnn_model.keras', monitor='val_loss', save_best_only=True)
 ]
 
 # Train
@@ -57,8 +57,8 @@ history = model.fit(
     verbose=1
 )
 
-# Ensure final best model saved (checkpoint handles best)
-model.save(MODELS_DIR / 'rnn_model_final.h5')
+# Ensure final best model saved (Keras format)
+model.save(MODELS_DIR / 'rnn_model_final.keras')
 
 # Plot training history and save figure
 plt.plot(history.history['loss'], label='Train Loss')

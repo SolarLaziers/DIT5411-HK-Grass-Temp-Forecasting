@@ -72,9 +72,9 @@ if test_slice.empty:
 else:
     plot_dates = test_slice.index[seq_length:seq_length+len(y_test)]
 
-# Load models
-rnn_model = tf.keras.models.load_model(MODELS_DIR / 'rnn_model.h5')
-lstm_model = tf.keras.models.load_model(MODELS_DIR / 'lstm_model.h5')
+# Load models (Keras format)
+rnn_model = tf.keras.models.load_model(MODELS_DIR / 'rnn_model.keras')
+lstm_model = tf.keras.models.load_model(MODELS_DIR / 'lstm_model.keras')
 
 # Predictions and inverse transform
 rnn_pred_scaled = rnn_model.predict(X_test)
