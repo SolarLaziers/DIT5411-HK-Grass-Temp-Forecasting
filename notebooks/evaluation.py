@@ -1,27 +1,24 @@
 #%% [markdown]
-# # Model Evaluation and Comparison
+# # Model Evaluation and Comparison (Enhanced)
 #
-# This script evaluates RNN and LSTM on test data, computes metrics, and generates visualizations.
-#
-# **Input**: Processed test data and trained models
-#
-# **Output**: Metrics and plots in /figures/
+# Produces clearer plots and a metrics summary file with MAE, RMSE, bias, std, R^2, and percentile error info.
+# Saves figures into /figures/ and metrics into /figures/metrics_summary.txt
 
 #%% [code]
 import numpy as np
 import tensorflow as tf
-from sklearn.metrics import mean_absolute_error, mean_squared_error
 import matplotlib.pyplot as plt
 import joblib
 import pandas as pd
 from pathlib import Path
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # Resolve repo paths reliably
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 MODELS_DIR = ROOT / "models"
 FIGURES_DIR = ROOT / "figures"
-FIGURES_DIR.mkdir(exist_ok=True)
+FIGURES_DIR.mkdir(exist_ok=True, parents=True)
 
 # Load arrays and scaler
 X_test = np.load(DATA_DIR / 'X_test.npy')
@@ -41,9 +38,7 @@ df = pd.read_csv(csv_path, encoding='utf-8-sig')
 if {'Year','Month','Day'}.issubset(df.columns):
     df['Date'] = pd.to_datetime(df[['Year','Month','Day']])
 else:
-    # Attempt to detect header and rebuild Date if columns are bilingual
     cols = [c for c in df.columns]
-    # try to find columns by name fragments
     def find_col(frags):
         for c in cols:
             if any(f in c.lower() for f in frags):
@@ -59,18 +54,13 @@ else:
 
 df = df.set_index('Date').sort_index()
 
-# Select test period (if cleaned CSV contains full range, slicing will work)
+# Determine plot_dates aligned with X_test / y_test
 test_slice = df['2025-01-01':'2025-10-30']
 if test_slice.empty:
-    # If slice empty, attempt to align using length of y_test and last dates
     all_dates = df.index
-    # dates corresponding to y_test start at index seq_length within the test_df used by preprocessing
-    seq_length = X_test.shape[1]
-    # assume test sequences were created from contiguous test_df used in preprocessing; pick last len(y_test) dates
     if len(all_dates) >= len(y_test) + seq_length:
         plot_dates = all_dates[-(len(y_test)+seq_length):][seq_length:]
     else:
-        # fallback to integer range
         plot_dates = pd.date_range(end=all_dates[-1], periods=len(y_test))
 else:
     plot_dates = test_slice.index[seq_length:seq_length+len(y_test)]
@@ -81,130 +71,141 @@ lstm_model = tf.keras.models.load_model(MODELS_DIR / 'lstm_model.keras')
 
 # Predictions and inverse transform
 rnn_pred_scaled = rnn_model.predict(X_test)
-rnn_pred = scaler.inverse_transform(rnn_pred_scaled)
-y_test_orig = scaler.inverse_transform(y_test.reshape(-1,1))
-
 lstm_pred_scaled = lstm_model.predict(X_test)
-lstm_pred = scaler.inverse_transform(lstm_pred_scaled)
+rnn_pred = scaler.inverse_transform(rnn_pred_scaled.reshape(-1,1)).flatten()
+lstm_pred = scaler.inverse_transform(lstm_pred_scaled.reshape(-1,1)).flatten()
+y_test_orig = scaler.inverse_transform(y_test.reshape(-1,1)).flatten()
 
-# Metrics
-mae_rnn = mean_absolute_error(y_test_orig, rnn_pred)
-rmse_rnn = np.sqrt(mean_squared_error(y_test_orig, rnn_pred))
-mae_lstm = mean_absolute_error(y_test_orig, lstm_pred)
-rmse_lstm = np.sqrt(mean_squared_error(y_test_orig, lstm_pred))
+# Compute metrics
+errors_rnn = y_test_orig - rnn_pred
+errors_lstm = y_test_orig - lstm_pred
 
-print(f"RNN: MAE={mae_rnn:.2f}, RMSE={rmse_rnn:.2f}")
-print(f"LSTM: MAE={mae_lstm:.2f}, RMSE={rmse_lstm:.2f}")
+def compute_summary(name, y_true, y_pred, errors):
+    mae = mean_absolute_error(y_true, y_pred)
+    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+    bias = np.mean(errors)            # mean error
+    err_std = np.std(errors, ddof=1)
+    r2 = r2_score(y_true, y_pred)
+    pct_95 = np.percentile(np.abs(errors), 95)
+    median_abs = np.median(np.abs(errors))
+    return dict(name=name, MAE=mae, RMSE=rmse, Bias=bias, Std=err_std, R2=r2, MedianAbs=median_abs, Pct95Abs=pct_95)
 
-# Plot Actual vs Predicted
-plt.figure(figsize=(12,6))
-plt.plot(plot_dates, y_test_orig, label='Actual')
-plt.plot(plot_dates, rnn_pred, label='RNN Pred')
-plt.plot(plot_dates, lstm_pred, label='LSTM Pred')
-plt.legend()
-plt.title('Actual vs Predicted Grass Min Temp (Test Period)')
-plt.savefig(FIGURES_DIR / 'predictions_plot.png')
+summary_rnn = compute_summary('RNN', y_test_orig, rnn_pred, errors_rnn)
+summary_lstm = compute_summary('LSTM', y_test_orig, lstm_pred, errors_lstm)
+
+# Print and save metrics summary
+metrics_df = pd.DataFrame([summary_rnn, summary_lstm]).set_index('name')
+print(metrics_df.round(3))
+(metrics_path := FIGURES_DIR / 'metrics_summary.txt').write_text(metrics_df.to_string(float_format=lambda x: f"{x:.3f}"))
+print(f"Saved metrics summary to: {metrics_path}")
+
+# Helper: rolling mean for smoother lines (window in days)
+def rolling(arr, window=7):
+    return pd.Series(arr, index=plot_dates).rolling(window=window, min_periods=1, center=True).mean().values
+
+rnn_roll = rolling(rnn_pred, 7)
+lstm_roll = rolling(lstm_pred, 7)
+actual_roll = rolling(y_test_orig, 7)
+
+# 1) Clean combined time-series plot with smoothed lines + shaded error envelopes
+# set plotting style with robust fallback (some environments lack seaborn style)
+try:
+    plt.style.use('seaborn-whitegrid')
+except Exception:
+    available = plt.style.available
+    for candidate in ('seaborn', 'seaborn-v0_8-darkgrid', 'ggplot', 'bmh', 'classic'):
+        if candidate in available:
+            plt.style.use(candidate)
+            break
+    else:
+        plt.style.use('default')
+
+plt.figure(figsize=(14,6))
+plt.plot(plot_dates, y_test_orig, label='Actual', color='black', linewidth=1.0, alpha=0.9)
+plt.plot(plot_dates, rnn_roll, label=f'RNN (7d MA) — MAE {summary_rnn["MAE"]:.2f}', color='C0', linewidth=1.5)
+plt.plot(plot_dates, lstm_roll, label=f'LSTM (7d MA) — MAE {summary_lstm["MAE"]:.2f}', color='C1', linewidth=1.5)
+
+# shaded error envelopes (±1 std of errors)
+plt.fill_between(plot_dates, rnn_roll - np.std(errors_rnn), rnn_roll + np.std(errors_rnn), color='C0', alpha=0.12)
+plt.fill_between(plot_dates, lstm_roll - np.std(errors_lstm), lstm_roll + np.std(errors_lstm), color='C1', alpha=0.12)
+
+# annotate statistics box
+textstr = (
+    f"RNN: MAE={summary_rnn['MAE']:.2f}, RMSE={summary_rnn['RMSE']:.2f}, Bias={summary_rnn['Bias']:.2f}\n"
+    f"LSTM: MAE={summary_lstm['MAE']:.2f}, RMSE={summary_lstm['RMSE']:.2f}, Bias={summary_lstm['Bias']:.2f}\n"
+    f"95% error (abs): RNN={summary_rnn['Pct95Abs']:.2f}, LSTM={summary_lstm['Pct95Abs']:.2f}"
+)
+plt.gca().text(0.01, 0.01, textstr, transform=plt.gca().transAxes, fontsize=9,
+               bbox=dict(facecolor='white', alpha=0.85, edgecolor='gray'))
+plt.legend(loc='upper left')
+plt.title('Actual vs Smoothed Predictions (7-day MA) — shaded ±1 std envelopes')
+plt.xlabel('Date'); plt.ylabel('Temperature (°C)')
+plt.tight_layout()
+plt.savefig(FIGURES_DIR / 'comparison_smoothed.png', dpi=150)
 plt.show()
 
-# Error Distribution (LSTM example)
-errors_lstm = y_test_orig.flatten() - lstm_pred.flatten()
+# 2) Error time-series with mean and ±1 std lines
+plt.figure(figsize=(14,4))
+plt.plot(plot_dates, errors_rnn, label='RNN error', color='C0', alpha=0.6)
+plt.plot(plot_dates, errors_lstm, label='LSTM error', color='C1', alpha=0.6)
+plt.axhline(0, color='k', linestyle='--', linewidth=0.8)
+plt.axhline(summary_rnn['Bias'], color='C0', linestyle=':', label=f'RNN bias {summary_rnn["Bias"]:.2f}')
+plt.axhline(summary_lstm['Bias'], color='C1', linestyle=':', label=f'LSTM bias {summary_lstm["Bias"]:.2f}')
+plt.fill_between(plot_dates, summary_rnn['Bias']-summary_rnn['Std'], summary_rnn['Bias']+summary_rnn['Std'], color='C0', alpha=0.08)
+plt.fill_between(plot_dates, summary_lstm['Bias']-summary_lstm['Std'], summary_lstm['Bias']+summary_lstm['Std'], color='C1', alpha=0.08)
+plt.legend()
+plt.title('Prediction Error Over Time (Actual - Predicted)')
+plt.xlabel('Date'); plt.ylabel('Error (°C)')
+plt.tight_layout()
+plt.savefig(FIGURES_DIR / 'error_time_series.png', dpi=150)
+plt.show()
+
+# 3) Scatter plot with regression fit and R^2
+plt.figure(figsize=(6,6))
+plt.scatter(y_test_orig, rnn_pred, s=12, alpha=0.5, color='C0', label='RNN')
+plt.scatter(y_test_orig, lstm_pred, s=12, alpha=0.5, color='C1', label='LSTM')
+mn = min(y_test_orig.min(), rnn_pred.min(), lstm_pred.min())
+mx = max(y_test_orig.max(), rnn_pred.max(), lstm_pred.max())
+plt.plot([mn,mx], [mn,mx], 'k--', linewidth=0.8)
+# regression fits
+coef_rnn = np.polyfit(y_test_orig, rnn_pred, 1)
+coef_lstm = np.polyfit(y_test_orig, lstm_pred, 1)
+yr = np.linspace(mn, mx, 100)
+plt.plot(yr, np.polyval(coef_rnn, yr), color='C0', linestyle=':', linewidth=1)
+plt.plot(yr, np.polyval(coef_lstm, yr), color='C1', linestyle=':', linewidth=1)
+plt.xlabel('Actual (°C)'); plt.ylabel('Predicted (°C)')
+plt.title(f'Predicted vs Actual — R2 RNN={summary_rnn["R2"]:.3f}, LSTM={summary_lstm["R2"]:.3f}')
+plt.legend()
+plt.tight_layout()
+plt.savefig(FIGURES_DIR / 'pred_vs_actual_combined.png', dpi=150)
+plt.show()
+
+# 4) Overlapped histogram + smoothed density of errors
+def smooth_hist_line(values, bins=60, smooth=3):
+    hist, edges = np.histogram(values, bins=bins, density=True)
+    centers = (edges[:-1] + edges[1:])/2
+    # simple convolution smoothing
+    kernel = np.ones(smooth)/smooth
+    hist_smooth = np.convolve(hist, kernel, mode='same')
+    return centers, hist_smooth
+
+cent_r, hist_r = smooth_hist_line(errors_rnn, bins=60, smooth=5)
+cent_l, hist_l = smooth_hist_line(errors_lstm, bins=60, smooth=5)
+
 plt.figure(figsize=(8,4))
-plt.hist(errors_lstm, bins=20)
-plt.title('LSTM Error Distribution')
-plt.savefig(FIGURES_DIR / 'lstm_error_dist.png')
-plt.show()
-
-# RNN Error Distribution
-errors_rnn = y_test_orig.flatten() - rnn_pred.flatten()
-plt.figure(figsize=(8,4))
-plt.hist(errors_rnn, bins=20)
-plt.title('RNN Error Distribution')
-plt.savefig(FIGURES_DIR / 'rnn_error_dist.png')
-plt.show()
-
-#%% [code]
-# Additional comparison plots
-
-# Flatten arrays for plotting
-actual = y_test_orig.flatten()
-rnn_pred_flat = rnn_pred.flatten()
-lstm_pred_flat = lstm_pred.flatten()
-
-# 1) Combined Predictions with mean lines
-mean_actual = actual.mean()
-mean_rnn = rnn_pred_flat.mean()
-mean_lstm = lstm_pred_flat.mean()
-
-plt.figure(figsize=(12,6))
-plt.plot(plot_dates, actual, label='Actual', color='k', linewidth=1)
-plt.plot(plot_dates, rnn_pred_flat, label='RNN Pred', alpha=0.8)
-plt.plot(plot_dates, lstm_pred_flat, label='LSTM Pred', alpha=0.8)
-plt.axhline(mean_actual, color='k', linestyle='--', label=f'Actual mean {mean_actual:.2f}°C')
-plt.axhline(mean_rnn, color='C0', linestyle=':', label=f'RNN mean {mean_rnn:.2f}°C')
-plt.axhline(mean_lstm, color='C1', linestyle=':', label=f'LSTM mean {mean_lstm:.2f}°C')
+plt.fill_between(cent_r, hist_r, color='C0', alpha=0.4, label='RNN error density')
+plt.fill_between(cent_l, hist_l, color='C1', alpha=0.4, label='LSTM error density')
+plt.axvline(0, color='k', linestyle='--', linewidth=0.8)
+plt.xlabel('Error (°C)'); plt.ylabel('Density')
+plt.title('Overlapped Error Densities')
 plt.legend()
-plt.title('Combined Predictions and Mean Lines')
-plt.xlabel('Date')
-plt.ylabel('Temperature (°C)')
 plt.tight_layout()
-plt.savefig(FIGURES_DIR / 'combined_predictions.png')
+plt.savefig(FIGURES_DIR / 'error_density_overlap.png', dpi=150)
 plt.show()
 
-# 2) Predicted vs Actual scatter plots (side-by-side)
-plt.figure(figsize=(10,4))
-plt.subplot(1,2,1)
-plt.scatter(actual, rnn_pred_flat, alpha=0.5, s=10)
-plt.plot([actual.min(), actual.max()], [actual.min(), actual.max()], 'r--')
-plt.xlabel('Actual (°C)')
-plt.ylabel('RNN Pred (°C)')
-plt.title('RNN: Predicted vs Actual')
+# 5) Save combined summary CSV (for programmatic use)
+metrics_csv = FIGURES_DIR / 'metrics_summary.csv'
+metrics_df.to_csv(metrics_csv)
+print(f"Saved metrics CSV to: {metrics_csv}")
 
-plt.subplot(1,2,2)
-plt.scatter(actual, lstm_pred_flat, alpha=0.5, s=10)
-plt.plot([actual.min(), actual.max()], [actual.min(), actual.max()], 'r--')
-plt.xlabel('Actual (°C)')
-plt.ylabel('LSTM Pred (°C)')
-plt.title('LSTM: Predicted vs Actual')
-
-plt.tight_layout()
-plt.savefig(FIGURES_DIR / 'pred_vs_actual_scatter.png')
-plt.show()
-
-# 3) Boxplot comparing error distributions
-plt.figure(figsize=(6,4))
-plt.boxplot([errors_rnn, errors_lstm], labels=['RNN', 'LSTM'])
-plt.title('Error Distribution Comparison (boxplot)')
-plt.ylabel('Prediction Error (°C)')
-plt.tight_layout()
-plt.savefig(FIGURES_DIR / 'errors_boxplot.png')
-plt.show()
-
-# 4) 7-day rolling MAE for both models
-mae_rnn_roll = pd.Series(np.abs(errors_rnn), index=plot_dates).rolling(7, min_periods=1).mean()
-mae_lstm_roll = pd.Series(np.abs(errors_lstm), index=plot_dates).rolling(7, min_periods=1).mean()
-
-plt.figure(figsize=(12,5))
-plt.plot(mae_rnn_roll, label='RNN rolling MAE (7d)')
-plt.plot(mae_lstm_roll, label='LSTM rolling MAE (7d)')
-plt.legend()
-plt.title('7-day Rolling MAE')
-plt.xlabel('Date')
-plt.ylabel('MAE (°C)')
-plt.tight_layout()
-plt.savefig(FIGURES_DIR / 'rolling_mae.png')
-plt.show()
-
-# 5) MAE bar comparison
-plt.figure(figsize=(6,4))
-plt.bar(['RNN', 'LSTM'], [mae_rnn, mae_lstm], color=['C0','C1'], alpha=0.8)
-plt.title('MAE Comparison')
-plt.ylabel('MAE (°C)')
-for i, v in enumerate([mae_rnn, mae_lstm]):
-    plt.text(i, v + 0.01, f"{v:.2f}", ha='center')
-plt.tight_layout()
-plt.savefig(FIGURES_DIR / 'mae_comparison.png')
-plt.show()
-
-#%% [markdown]
-# ## Analysis
-# LSTM outperforms RNN due to better handling of long-term dependencies. Check high-error days for cold snaps.
+# End

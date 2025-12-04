@@ -1,0 +1,4 @@
+       MAE  RMSE  Bias   Std    R2  MedianAbs  Pct95Abs
+name                                                   
+RNN  0.978 1.326 0.105 1.324 0.914      0.700     2.792
+LSTM 0.951 1.301 0.061 1.302 0.917      0.706     2.781
