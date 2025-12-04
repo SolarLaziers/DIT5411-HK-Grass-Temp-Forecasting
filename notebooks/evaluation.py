@@ -28,6 +28,9 @@ X_test = np.load(DATA_DIR / 'X_test.npy')
 y_test = np.load(DATA_DIR / 'y_test.npy')
 scaler = joblib.load(DATA_DIR / 'scaler.pkl')
 
+# Define sequence length used to align dates with X_test / y_test
+seq_length = X_test.shape[1]
+
 # Load cleaned CSV (produced by data_preprocessing.py) if available; fallback to raw CSV
 CLEANED_CSV = DATA_DIR / 'daily_HKO_GMT_ALL_filled.csv'
 RAW_CSV = DATA_DIR / 'daily_HKO_GMT_ALL.csv'
