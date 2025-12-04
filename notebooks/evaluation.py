@@ -122,6 +122,89 @@ plt.title('RNN Error Distribution')
 plt.savefig(FIGURES_DIR / 'rnn_error_dist.png')
 plt.show()
 
+#%% [code]
+# Additional comparison plots
+
+# Flatten arrays for plotting
+actual = y_test_orig.flatten()
+rnn_pred_flat = rnn_pred.flatten()
+lstm_pred_flat = lstm_pred.flatten()
+
+# 1) Combined Predictions with mean lines
+mean_actual = actual.mean()
+mean_rnn = rnn_pred_flat.mean()
+mean_lstm = lstm_pred_flat.mean()
+
+plt.figure(figsize=(12,6))
+plt.plot(plot_dates, actual, label='Actual', color='k', linewidth=1)
+plt.plot(plot_dates, rnn_pred_flat, label='RNN Pred', alpha=0.8)
+plt.plot(plot_dates, lstm_pred_flat, label='LSTM Pred', alpha=0.8)
+plt.axhline(mean_actual, color='k', linestyle='--', label=f'Actual mean {mean_actual:.2f}°C')
+plt.axhline(mean_rnn, color='C0', linestyle=':', label=f'RNN mean {mean_rnn:.2f}°C')
+plt.axhline(mean_lstm, color='C1', linestyle=':', label=f'LSTM mean {mean_lstm:.2f}°C')
+plt.legend()
+plt.title('Combined Predictions and Mean Lines')
+plt.xlabel('Date')
+plt.ylabel('Temperature (°C)')
+plt.tight_layout()
+plt.savefig(FIGURES_DIR / 'combined_predictions.png')
+plt.show()
+
+# 2) Predicted vs Actual scatter plots (side-by-side)
+plt.figure(figsize=(10,4))
+plt.subplot(1,2,1)
+plt.scatter(actual, rnn_pred_flat, alpha=0.5, s=10)
+plt.plot([actual.min(), actual.max()], [actual.min(), actual.max()], 'r--')
+plt.xlabel('Actual (°C)')
+plt.ylabel('RNN Pred (°C)')
+plt.title('RNN: Predicted vs Actual')
+
+plt.subplot(1,2,2)
+plt.scatter(actual, lstm_pred_flat, alpha=0.5, s=10)
+plt.plot([actual.min(), actual.max()], [actual.min(), actual.max()], 'r--')
+plt.xlabel('Actual (°C)')
+plt.ylabel('LSTM Pred (°C)')
+plt.title('LSTM: Predicted vs Actual')
+
+plt.tight_layout()
+plt.savefig(FIGURES_DIR / 'pred_vs_actual_scatter.png')
+plt.show()
+
+# 3) Boxplot comparing error distributions
+plt.figure(figsize=(6,4))
+plt.boxplot([errors_rnn, errors_lstm], labels=['RNN', 'LSTM'])
+plt.title('Error Distribution Comparison (boxplot)')
+plt.ylabel('Prediction Error (°C)')
+plt.tight_layout()
+plt.savefig(FIGURES_DIR / 'errors_boxplot.png')
+plt.show()
+
+# 4) 7-day rolling MAE for both models
+mae_rnn_roll = pd.Series(np.abs(errors_rnn), index=plot_dates).rolling(7, min_periods=1).mean()
+mae_lstm_roll = pd.Series(np.abs(errors_lstm), index=plot_dates).rolling(7, min_periods=1).mean()
+
+plt.figure(figsize=(12,5))
+plt.plot(mae_rnn_roll, label='RNN rolling MAE (7d)')
+plt.plot(mae_lstm_roll, label='LSTM rolling MAE (7d)')
+plt.legend()
+plt.title('7-day Rolling MAE')
+plt.xlabel('Date')
+plt.ylabel('MAE (°C)')
+plt.tight_layout()
+plt.savefig(FIGURES_DIR / 'rolling_mae.png')
+plt.show()
+
+# 5) MAE bar comparison
+plt.figure(figsize=(6,4))
+plt.bar(['RNN', 'LSTM'], [mae_rnn, mae_lstm], color=['C0','C1'], alpha=0.8)
+plt.title('MAE Comparison')
+plt.ylabel('MAE (°C)')
+for i, v in enumerate([mae_rnn, mae_lstm]):
+    plt.text(i, v + 0.01, f"{v:.2f}", ha='center')
+plt.tight_layout()
+plt.savefig(FIGURES_DIR / 'mae_comparison.png')
+plt.show()
+
 #%% [markdown]
 # ## Analysis
 # LSTM outperforms RNN due to better handling of long-term dependencies. Check high-error days for cold snaps.

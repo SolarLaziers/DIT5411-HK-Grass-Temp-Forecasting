@@ -39,8 +39,8 @@ Dependencies include TensorFlow, Keras, Pandas, Matplotlib, and Scikit-learn.
    - Final report: Available in the `/report/` directory.
 
 ## Results Summary
-- **RNN**: MAE = xx°C, RMSE = xx°C
-- **LSTM**: MAE = xx°C, RMSE = xx°C
+- **RNN**: MAE = 0.98°C, RMSE = 1.33°C
+- **LSTM**: MAE = 0.95°C, RMSE = 1.30°C
 
 The LSTM model demonstrates superior performance, particularly in capturing long-term patterns during Hong Kong's winter lows and cold snaps.
 
