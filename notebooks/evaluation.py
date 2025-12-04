@@ -111,7 +111,15 @@ errors_lstm = y_test_orig.flatten() - lstm_pred.flatten()
 plt.figure(figsize=(8,4))
 plt.hist(errors_lstm, bins=20)
 plt.title('LSTM Error Distribution')
-plt.savefig(FIGURES_DIR / 'error_dist.png')
+plt.savefig(FIGURES_DIR / 'lstm_error_dist.png')
+plt.show()
+
+# RNN Error Distribution
+errors_rnn = y_test_orig.flatten() - rnn_pred.flatten()
+plt.figure(figsize=(8,4))
+plt.hist(errors_rnn, bins=20)
+plt.title('RNN Error Distribution')
+plt.savefig(FIGURES_DIR / 'rnn_error_dist.png')
 plt.show()
 
 #%% [markdown]
