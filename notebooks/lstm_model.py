@@ -5,7 +5,7 @@
 #
 # **Input**: Processed data from data_preprocessing.py
 #
-# **Output**: Trained LSTM model (.h5 file)
+# **Output**: Trained LSTM model (.keras file)
 
 #%% [code]
 import numpy as np

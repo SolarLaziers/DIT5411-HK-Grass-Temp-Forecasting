@@ -5,7 +5,7 @@
 #
 # **Input**: Processed data from data_preprocessing.py
 #
-# **Output**: Trained RNN model (.h5 file)
+# **Output**: Trained RNN model (.keras file)
 
 #%% [code]
 import numpy as np
